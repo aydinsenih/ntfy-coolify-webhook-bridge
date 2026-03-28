@@ -1,5 +1,6 @@
 const NTFY_URL = process.env.NTFY_URL || "https://ntfy.sh";
 const NTFY_TOPIC = process.env.NTFY_TOPIC || "coolify";
+const NTFY_TOKEN = process.env.NTFY_TOKEN || "";
 
 /**
  * Determine ntfy priority based on the webhook payload.
@@ -88,14 +89,20 @@ async function sendNotification(payload) {
   const body = buildBody(payload);
   const tags = buildTags(payload);
 
+  const headers = {
+    "Title": title,
+    "Priority": priority,
+    "Tags": tags,
+    "Content-Type": "text/plain",
+  };
+
+  if (NTFY_TOKEN) {
+    headers["Authorization"] = `Bearer ${NTFY_TOKEN}`;
+  }
+
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Title": title,
-      "Priority": priority,
-      "Tags": tags,
-      "Content-Type": "text/plain",
-    },
+    headers,
     body: body,
   });
 
