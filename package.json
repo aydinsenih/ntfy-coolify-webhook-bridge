@@ -1,0 +1,28 @@
+{
+  "name": "ntfy-coolify-webhook-bridge",
+  "version": "1.0.0",
+  "description": "A mini backend that receives Coolify webhook events and forwards them as notifications to an ntfy server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aydinsenih/ntfy-coolify-webhook-bridge.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/aydinsenih/ntfy-coolify-webhook-bridge/issues"
+  },
+  "homepage": "https://github.com/aydinsenih/ntfy-coolify-webhook-bridge#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0"
+  }
+}
