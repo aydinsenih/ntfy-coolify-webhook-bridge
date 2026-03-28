@@ -1,0 +1,44 @@
+const express = require("express");
+const { sendNotification, getPriority, buildTitle } = require("./ntfy");
+
+const app = express();
+
+app.use(express.json());
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.post("/webhook", async (req, res) => {
+  const payload = req.body;
+
+  if (!payload || Object.keys(payload).length === 0) {
+    return res.status(400).json({ error: "Empty payload" });
+  }
+
+  try {
+    const result = await sendNotification(payload);
+    const priority = getPriority(payload);
+    const title = buildTitle(payload);
+
+    if (result.ok) {
+      return res.json({
+        message: "Notification sent",
+        priority,
+        title,
+      });
+    }
+
+    return res.status(502).json({
+      error: "Failed to send notification to ntfy",
+      ntfyStatus: result.status,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      error: "Internal server error",
+      details: err.message,
+    });
+  }
+});
+
+module.exports = app;
