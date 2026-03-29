@@ -57,21 +57,21 @@ describe("toTitleCase", () => {
     expect(toTitleCase("success")).toBe("Success");
   });
 
-  test("handles already capitalized input", () => {
-    expect(toTitleCase("My-App")).toBe("My-App");
+  test("converts hyphenated to Title Case", () => {
+    expect(toTitleCase("my-app")).toBe("My App");
   });
 });
 
 describe("buildTitle", () => {
   test("includes project name and status in title case", () => {
     const title = buildTitle({ project: "my-app", status: "success" });
-    expect(title).toContain("My-App");
+    expect(title).toContain("My App");
     expect(title).toContain("Success");
   });
 
   test("uses project_name when project is absent", () => {
     const title = buildTitle({ project_name: "other-app" });
-    expect(title).toContain("Other-App");
+    expect(title).toContain("Other App");
   });
 
   test("includes event and type in title case", () => {

@@ -27,7 +27,7 @@ function getPriority(payload) {
  */
 function toTitleCase(str) {
   return str
-    .replace(/[._]/g, " ")
+    .replace(/[._-]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
