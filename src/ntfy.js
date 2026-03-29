@@ -23,21 +23,30 @@ function getPriority(payload) {
 }
 
 /**
+ * Convert a snake_case or dot.separated string to Title Case.
+ */
+function toTitleCase(str) {
+  return str
+    .replace(/[._-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
  * Build a human-readable notification title from the webhook payload.
  */
 function buildTitle(payload) {
   const parts = [];
   if (payload.project || payload.project_name) {
-    parts.push(payload.project || payload.project_name);
+    parts.push(toTitleCase(payload.project || payload.project_name));
   }
   if (payload.event) {
-    parts.push(payload.event);
+    parts.push(toTitleCase(payload.event));
   }
   if (payload.type) {
-    parts.push(payload.type);
+    parts.push(toTitleCase(payload.type));
   }
   if (payload.status) {
-    parts.push(payload.status);
+    parts.push(toTitleCase(payload.status));
   }
 
   return parts.length > 0 ? `Coolify: ${parts.join(" | ")}` : "Coolify Webhook";
@@ -49,6 +58,7 @@ function buildTitle(payload) {
 function buildBody(payload) {
   const lines = [];
 
+  if (payload.message) lines.push(payload.message);
   if (payload.event) lines.push(`Event: ${payload.event}`);
   if (payload.type) lines.push(`Type: ${payload.type}`);
   if (payload.status) lines.push(`Status: ${payload.status}`);
@@ -56,7 +66,6 @@ function buildBody(payload) {
     lines.push(`Project: ${payload.project || payload.project_name}`);
   }
   if (payload.environment) lines.push(`Environment: ${payload.environment}`);
-  if (payload.message) lines.push(`Message: ${payload.message}`);
 
   if (payload.data && typeof payload.data === "object") {
     if (payload.data.commit) lines.push(`Commit: ${payload.data.commit}`);
@@ -109,4 +118,4 @@ async function sendNotification(payload) {
   return { ok: response.ok, status: response.status };
 }
 
-module.exports = { getPriority, buildTitle, buildBody, buildTags, sendNotification };
+module.exports = { getPriority, buildTitle, buildBody, buildTags, sendNotification, toTitleCase };

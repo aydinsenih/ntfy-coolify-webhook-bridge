@@ -1,4 +1,4 @@
-const { getPriority, buildTitle, buildBody, buildTags } = require("../src/ntfy");
+const { getPriority, buildTitle, buildBody, buildTags, toTitleCase } = require("../src/ntfy");
 
 describe("getPriority", () => {
   test("returns 'default' for success status", () => {
@@ -44,22 +44,45 @@ describe("getPriority", () => {
   });
 });
 
+describe("toTitleCase", () => {
+  test("converts snake_case to Title Case", () => {
+    expect(toTitleCase("traefik_version_outdated")).toBe("Traefik Version Outdated");
+  });
+
+  test("converts dot.separated to Title Case", () => {
+    expect(toTitleCase("deployment.completed")).toBe("Deployment Completed");
+  });
+
+  test("capitalizes single word", () => {
+    expect(toTitleCase("success")).toBe("Success");
+  });
+
+  test("converts hyphenated to Title Case", () => {
+    expect(toTitleCase("my-app")).toBe("My App");
+  });
+});
+
 describe("buildTitle", () => {
-  test("includes project name and status", () => {
+  test("includes project name and status in title case", () => {
     const title = buildTitle({ project: "my-app", status: "success" });
-    expect(title).toContain("my-app");
-    expect(title).toContain("success");
+    expect(title).toContain("My App");
+    expect(title).toContain("Success");
   });
 
   test("uses project_name when project is absent", () => {
     const title = buildTitle({ project_name: "other-app" });
-    expect(title).toContain("other-app");
+    expect(title).toContain("Other App");
   });
 
-  test("includes event and type", () => {
+  test("includes event and type in title case", () => {
     const title = buildTitle({ event: "deployment", type: "build", status: "ok" });
-    expect(title).toContain("deployment");
-    expect(title).toContain("build");
+    expect(title).toContain("Deployment");
+    expect(title).toContain("Build");
+  });
+
+  test("converts snake_case event to title case", () => {
+    const title = buildTitle({ event: "traefik_version_outdated" });
+    expect(title).toBe("Coolify: Traefik Version Outdated");
   });
 
   test("returns default title for empty payload", () => {
@@ -84,16 +107,28 @@ describe("buildBody", () => {
       },
     });
 
+    expect(body).toContain("Deploy finished");
+    expect(body).not.toContain("Message:");
     expect(body).toContain("Event: deployment.completed");
     expect(body).toContain("Type: deployment");
     expect(body).toContain("Status: success");
     expect(body).toContain("Project: my-app");
     expect(body).toContain("Environment: production");
-    expect(body).toContain("Message: Deploy finished");
     expect(body).toContain("Commit: abc123");
     expect(body).toContain("Branch: main");
     expect(body).toContain("URL: https://my-app.example.com");
     expect(body).toContain("Time: 2026-03-28T07:00:00Z");
+  });
+
+  test("message appears before event in body", () => {
+    const body = buildBody({
+      event: "traefik_version_outdated",
+      message: "Traefik proxy outdated",
+    });
+
+    const messageIndex = body.indexOf("Traefik proxy outdated");
+    const eventIndex = body.indexOf("Event: traefik_version_outdated");
+    expect(messageIndex).toBeLessThan(eventIndex);
   });
 
   test("returns JSON for empty payload", () => {
