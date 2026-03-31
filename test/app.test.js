@@ -61,3 +61,51 @@ describe("POST /webhook", () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 });
+
+describe("POST /webhook with WEBHOOK_SECRET", () => {
+  const originalSecret = process.env.WEBHOOK_SECRET;
+
+  beforeAll(() => {
+    process.env.WEBHOOK_SECRET = "test-secret";
+  });
+
+  afterAll(() => {
+    if (originalSecret === undefined) {
+      delete process.env.WEBHOOK_SECRET;
+    } else {
+      process.env.WEBHOOK_SECRET = originalSecret;
+    }
+  });
+
+  test("returns 401 when key query parameter is missing", async () => {
+    const res = await fetch(`${baseUrl}/webhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "success", project: "test-app" }),
+    });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toBe("Unauthorized: invalid or missing key");
+  });
+
+  test("returns 401 when key query parameter is incorrect", async () => {
+    const res = await fetch(`${baseUrl}/webhook?key=wrong-key`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "success", project: "test-app" }),
+    });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toBe("Unauthorized: invalid or missing key");
+  });
+
+  test("allows request when key query parameter matches WEBHOOK_SECRET", async () => {
+    const res = await fetch(`${baseUrl}/webhook?key=test-secret`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "success", project: "test-app" }),
+    });
+    // Should pass auth check — will fail later because ntfy is not available
+    expect(res.status).not.toBe(401);
+  });
+});

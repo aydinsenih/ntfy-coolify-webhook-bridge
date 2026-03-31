@@ -10,6 +10,12 @@ app.get("/health", (_req, res) => {
 });
 
 app.post("/webhook", async (req, res) => {
+  const webhookSecret = process.env.WEBHOOK_SECRET;
+
+  if (webhookSecret && req.query.key !== webhookSecret) {
+    return res.status(401).json({ error: "Unauthorized: invalid or missing key" });
+  }
+
   const payload = req.body;
 
   if (!payload || Object.keys(payload).length === 0) {
