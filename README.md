@@ -2,8 +2,18 @@
 
 A lightweight Node.js backend that receives [Coolify](https://coolify.io) webhook events, structures the JSON payload, and forwards human-readable notifications to an [ntfy](https://ntfy.sh) server.
 
-- **Success** events are sent with **default** priority.
-- **Error / failure** events are sent with **high** priority.
+Each notification names the thing the event is about — which server went down, which application was deployed — and is tappable straight through to the relevant page:
+
+```
+🚨  hetzner-fsn1 · Server unreachable          ✅  api · Deployment successful
+    Server: hetzner-fsn1                           Application: api
+    Open in Coolify: https://…/server/a1b2         Project: atlas → production
+                                                   Open application: https://api.atlas.dev
+                                                   Deployment logs: https://…/deployment/d9f2
+```
+
+- **Failures** are sent with **high** priority; successes and advisories with **default**.
+- Tapping the notification opens the most useful link for that event; any secondary link becomes a button.
 
 ## Quick Start
 
@@ -61,17 +71,20 @@ Receives a Coolify webhook JSON payload and forwards a notification to ntfy.
 
 When `WEBHOOK_SECRET` is set, the request must include a matching `key` query parameter (e.g. `POST /webhook?key=your-secret-key`). Requests with a missing or incorrect key receive a `401 Unauthorized` response.
 
-**Example request:**
+**Example request** (a real Coolify `deployment_success` payload):
 
 ```bash
 curl -X POST "http://localhost:3000/webhook?key=your-secret-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "event": "deployment.completed",
-    "status": "success",
-    "project": "my-app",
+    "success": true,
+    "message": "New version successfully deployed",
+    "event": "deployment_success",
+    "application_name": "api",
+    "deployment_url": "https://coolify.example.com/project/p/environment/e/application/a/deployment/d9f2",
+    "project": "atlas",
     "environment": "production",
-    "timestamp": "2026-03-28T07:00:00Z"
+    "fqdn": "https://api.atlas.dev"
   }'
 ```
 
@@ -81,13 +94,36 @@ curl -X POST "http://localhost:3000/webhook?key=your-secret-key" \
 {
   "message": "Notification sent",
   "priority": "default",
-  "title": "Coolify: my-app | deployment.completed | success"
+  "title": "api · Deployment successful"
 }
 ```
 
-## Priority Logic
+## Supported Events
 
-The bridge inspects the `status`, `type`, and `event` fields of the incoming payload. If any of these fields contain error-related keywords (`error`, `fail`, `failed`, `failure`, `crashed`, `timeout`, `cancelled`), the notification is sent with **high** priority. Otherwise, **default** priority is used.
+Every Coolify webhook event is recognised and formatted with the fields it actually carries. The subject column is what appears first in the notification title.
+
+| Event | Subject | Priority | Also shown |
+|---|---|---|---|
+| `deployment_success` / `deployment_failed` | application name | default / **high** | project → environment, PR number, live URL, deployment logs |
+| `status_changed` | application name | **high** | project → environment, links |
+| `restart_limit_reached` | application name | **high** | restart count / limit |
+| `server_reachable` / `server_unreachable` | **server name** | default / **high** | link to the server |
+| `high_disk_usage` | server name | **high** | usage % and threshold |
+| `docker_cleanup_success` / `_failed` | server name | default / **high** | cleanup result or error |
+| `server_patch_check` / `_error` | server name | default | update count, critical packages, package manager |
+| `traefik_version_outdated` | server name, or affected count | default | current → latest version per server |
+| `container_stopped` / `_restarted` | container name | **high** / default | the server it ran on |
+| `backup_success` / `_failed` / `_with_s3_warning` | database name | default / **high** / default | database type, schedule, error output |
+| `task_success` / `task_failed` | task name | default / **high** | command output |
+| `test` | — | default | link to Coolify |
+
+Advisory events (`server_patch_check`, `traefik_version_outdated`, `backup_success_with_s3_warning`) report `success: false` but stay at **default** priority so they don't buzz like an outage.
+
+Long command output (`error_output`, `output`, cleanup messages) is truncated, and the body is capped below ntfy's 4096-byte limit so notifications are never converted into attachments.
+
+### Unrecognised payloads
+
+Anything the bridge doesn't recognise — a future Coolify event, or a hand-rolled payload — still renders. It falls back to generic fields (`message`, `type`, `status`, `project`, `environment`, `data.commit` / `data.branch` / `data.url`, `timestamp`) and derives priority from `success`, or from error keywords (`error`, `fail`, `failed`, `failure`, `crashed`, `timeout`, `cancelled`) in `status` / `type` / `event`.
 
 ## Tests
 
