@@ -26,7 +26,38 @@ describe("GET /health", () => {
   });
 });
 
+/**
+ * The bridge and the test client both use global fetch, so the mock forwards
+ * anything aimed at the test server and only stands in for the ntfy call.
+ */
+const realFetch = global.fetch;
+let ntfyResponse;
+
+beforeEach(() => {
+  ntfyResponse = { ok: true, status: 200 };
+  global.fetch = jest.fn((url, options) => {
+    if (String(url).startsWith(baseUrl)) return realFetch(url, options);
+    return typeof ntfyResponse === "function"
+      ? ntfyResponse()
+      : Promise.resolve(ntfyResponse);
+  });
+});
+
+afterEach(() => {
+  global.fetch = realFetch;
+});
+
 describe("POST /webhook", () => {
+  const deployment = {
+    success: true,
+    message: "New version successfully deployed",
+    event: "deployment_success",
+    application_name: "api",
+    project: "atlas",
+    environment: "production",
+    fqdn: "https://api.atlas.dev",
+  };
+
   test("returns 400 for empty payload", async () => {
     const res = await fetch(`${baseUrl}/webhook`, {
       method: "POST",
@@ -38,27 +69,46 @@ describe("POST /webhook", () => {
     expect(body.error).toBe("Empty payload");
   });
 
-  test("returns 500/502 when ntfy server is unreachable", async () => {
-    // With no real ntfy server, this should return an error
+  test("forwards the notification and echoes the resolved title", async () => {
     const res = await fetch(`${baseUrl}/webhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "success", project: "test-app" }),
+      body: JSON.stringify(deployment),
     });
-    // It will fail because NTFY_URL points to a non-existent server
-    expect([500, 502]).toContain(res.status);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.message).toBe("Notification sent");
+    expect(body.priority).toBe("default");
+    expect(body.title).toBe("api · Deployment successful");
   });
 
-  test("returns default priority for success payload", async () => {
-    // We test the priority logic indirectly via the error response
+  test("returns 502 when ntfy rejects the notification", async () => {
+    ntfyResponse = { ok: false, status: 503 };
+
     const res = await fetch(`${baseUrl}/webhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "success", project: "test-app" }),
+      body: JSON.stringify(deployment),
     });
-    // The request will fail because ntfy is not available, but we can
-    // verify the endpoint accepts the payload
-    expect(res.status).toBeGreaterThanOrEqual(400);
+
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.ntfyStatus).toBe(503);
+  });
+
+  test("returns 500 when the ntfy server is unreachable", async () => {
+    ntfyResponse = () => Promise.reject(new Error("connect ECONNREFUSED"));
+
+    const res = await fetch(`${baseUrl}/webhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(deployment),
+    });
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe("Internal server error");
   });
 });
 
