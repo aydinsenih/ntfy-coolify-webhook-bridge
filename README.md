@@ -26,6 +26,7 @@ Each notification names the thing the event is about — which server went down,
 | `NTFY_TOKEN`     | ntfy access token for authentication               | *(empty — no auth)*  |
 | `PORT`           | Port the server listens on                         | `3000`               |
 | `WEBHOOK_SECRET` | Secret key required as `?key=` query parameter     | *(empty — no check)* |
+| `LOG_LEVEL`      | `debug`, `info`, `warn`, `error` or `silent`        | `info`               |
 
 Copy `.env.example` to `.env` and adjust the values:
 
@@ -124,6 +125,33 @@ Long command output (`error_output`, `output`, cleanup messages) is truncated, a
 ### Unrecognised payloads
 
 Anything the bridge doesn't recognise — a future Coolify event, or a hand-rolled payload — still renders. It falls back to generic fields (`message`, `type`, `status`, `project`, `environment`, `data.commit` / `data.branch` / `data.url`, `timestamp`) and derives priority from `success`, or from error keywords (`error`, `fail`, `failed`, `failure`, `crashed`, `timeout`, `cancelled`) in `status` / `type` / `event`.
+
+## Logging
+
+Every webhook the bridge receives and every notification it sends is logged as
+a single line — a timestamp, the level, a short message, then the fields as
+`key=value` pairs:
+
+```
+2026-08-22T09:14:02.118Z INFO Received webhook event=deployment_success recognised=true subject=api success=true
+2026-08-22T09:14:02.244Z INFO Sent notification event=deployment_success recognised=true subject=api success=true topic=coolify title="api · Deployment successful" priority=default tags=white_check_mark links=2 bytes=184 status=200 ms=124
+```
+
+`recognised` says whether the event is in the catalog above, so an unknown
+Coolify event shows up in the logs rather than silently rendering generically.
+
+Rejected and failed requests are written to stderr:
+
+```
+2026-08-22T09:15:41.002Z WARN Rejected webhook reason="invalid or missing key" ip=203.0.113.9
+2026-08-22T09:16:07.551Z WARN Rejected webhook reason="empty payload" ip=203.0.113.9
+2026-08-22T09:17:22.870Z ERROR ntfy rejected notification … status=503 ms=88
+2026-08-22T09:18:03.412Z ERROR Failed to reach ntfy event=deployment_failed … details="fetch failed"
+```
+
+Set `LOG_LEVEL=debug` to additionally log the full JSON payload of each
+webhook (`Received payload body="{…}"`), or `LOG_LEVEL=silent` to turn logging
+off. Tokens and the webhook secret are never logged.
 
 ## Tests
 
