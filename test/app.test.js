@@ -159,3 +159,95 @@ describe("POST /webhook with WEBHOOK_SECRET", () => {
     expect(res.status).not.toBe(401);
   });
 });
+
+describe("logging", () => {
+  let out;
+  let err;
+
+  beforeEach(() => {
+    process.env.LOG_LEVEL = "info";
+    out = jest.spyOn(console, "log").mockImplementation(() => {});
+    err = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.env.LOG_LEVEL = "silent";
+    jest.restoreAllMocks();
+  });
+
+  /** Every line written to a console spy, joined for a single match. */
+  function linesOf(spy) {
+    return spy.mock.calls.map((call) => call[0]).join("\n");
+  }
+
+  function post(payload) {
+    return fetch(`${baseUrl}/webhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  const deployment = {
+    success: true,
+    event: "deployment_success",
+    application_name: "api",
+    project: "atlas",
+    environment: "production",
+    fqdn: "https://api.atlas.dev",
+  };
+
+  test("logs the event received and the notification sent", async () => {
+    await post(deployment);
+
+    const lines = linesOf(out);
+    expect(lines).toContain(
+      "INFO Received webhook event=deployment_success recognised=true subject=api success=true"
+    );
+    expect(lines).toContain("INFO Sent notification");
+    expect(lines).toContain('title="api · Deployment successful"');
+    expect(lines).toContain("priority=default");
+    expect(lines).toContain("status=200");
+  });
+
+  test("names what it could not recognise", async () => {
+    await post({ status: "success", project: "test-app" });
+
+    expect(linesOf(out)).toContain(
+      "INFO Received webhook event=success recognised=false subject=test-app"
+    );
+  });
+
+  test("logs the whole payload only at debug level", async () => {
+    await post(deployment);
+    expect(linesOf(out)).not.toContain("Received payload");
+
+    process.env.LOG_LEVEL = "debug";
+    await post(deployment);
+    expect(linesOf(out)).toContain('Received payload body="{');
+  });
+
+  test("logs a rejected webhook as a warning", async () => {
+    await post({});
+
+    expect(linesOf(err)).toContain('WARN Rejected webhook reason="empty payload"');
+    expect(linesOf(out)).not.toContain("Received webhook");
+  });
+
+  test("logs an ntfy rejection with its status", async () => {
+    ntfyResponse = { ok: false, status: 503 };
+    await post(deployment);
+
+    expect(linesOf(err)).toContain("ERROR ntfy rejected notification");
+    expect(linesOf(err)).toContain("status=503");
+  });
+
+  test("logs an unreachable ntfy server with the reason", async () => {
+    ntfyResponse = () => Promise.reject(new Error("connect ECONNREFUSED"));
+    await post(deployment);
+
+    expect(linesOf(err)).toContain("ERROR Failed to reach ntfy");
+    expect(linesOf(err)).toContain("event=deployment_success");
+    expect(linesOf(err)).toContain('details="connect ECONNREFUSED"');
+  });
+});

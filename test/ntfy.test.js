@@ -1,4 +1,5 @@
 const {
+  describePayload,
   getPriority,
   buildTitle,
   buildBody,
@@ -449,5 +450,50 @@ describe("sendNotification", () => {
   test("reports the ntfy response", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
     await expect(sendNotification(serverReachable)).resolves.toEqual({ ok: false, status: 503 });
+  });
+});
+
+describe("describePayload", () => {
+  test("names the event and what it is about", () => {
+    expect(describePayload(deploymentSuccess)).toEqual({
+      event: "deployment_success",
+      recognised: true,
+      subject: "api",
+      success: true,
+    });
+  });
+
+  test("uses the catalog subject, not the application name, for a server event", () => {
+    expect(describePayload(serverUnreachable)).toMatchObject({
+      event: "server_unreachable",
+      subject: "hetzner-fsn1",
+      success: false,
+    });
+  });
+
+  test("marks an event outside the catalog and falls back to a generic subject", () => {
+    expect(describePayload({ event: "future_event", database_name: "orders" })).toEqual({
+      event: "future_event",
+      recognised: false,
+      subject: "orders",
+      success: undefined,
+    });
+  });
+
+  test("falls back to type or status when there is no event", () => {
+    expect(describePayload({ type: "deployment", status: "failed" })).toMatchObject({
+      event: "deployment",
+      recognised: false,
+    });
+    expect(describePayload({ status: "failed" })).toMatchObject({ event: "failed" });
+  });
+
+  test("reports an unknown event for a payload carrying nothing to go on", () => {
+    expect(describePayload({ unrecognised: true })).toEqual({
+      event: "unknown",
+      recognised: false,
+      subject: null,
+      success: undefined,
+    });
   });
 });

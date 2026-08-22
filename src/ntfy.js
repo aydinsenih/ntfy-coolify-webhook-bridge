@@ -1,3 +1,5 @@
+const logger = require("./logger");
+
 const NTFY_URL = process.env.NTFY_URL || "https://ntfy.sh";
 const NTFY_TOPIC = process.env.NTFY_TOPIC || "coolify";
 const NTFY_TOKEN = process.env.NTFY_TOKEN || "";
@@ -332,6 +334,21 @@ function fallbackSubject(payload) {
 }
 
 /**
+ * The identifying fields of a payload, for a log line: what happened, what it
+ * happened to, and whether the catalog recognised the event.
+ */
+function describePayload(payload) {
+  const event = getEvent(payload);
+
+  return {
+    event: payload.event || payload.type || payload.status || "unknown",
+    recognised: Boolean(event),
+    subject: (event ? resolve(event.subject, payload) : null) || fallbackSubject(payload),
+    success: payload.success,
+  };
+}
+
+/**
  * Determine ntfy priority. Known events carry a curated priority so advisory
  * events (available patches, an outdated proxy) do not buzz like an outage.
  * Anything else falls back to keyword matching on the legacy fields.
@@ -496,16 +513,36 @@ async function sendNotification(payload) {
     headers["Authorization"] = `Bearer ${NTFY_TOKEN}`;
   }
 
+  const startedAt = Date.now();
   const response = await fetch(url, {
     method: "POST",
     headers,
     body: body,
   });
 
+  const outcome = {
+    ...describePayload(payload),
+    topic: NTFY_TOPIC,
+    title,
+    priority,
+    tags,
+    links: links.length,
+    bytes: Buffer.byteLength(body, "utf8"),
+    status: response.status,
+    ms: Date.now() - startedAt,
+  };
+
+  if (response.ok) {
+    logger.info("Sent notification", outcome);
+  } else {
+    logger.error("ntfy rejected notification", outcome);
+  }
+
   return { ok: response.ok, status: response.status };
 }
 
 module.exports = {
+  describePayload,
   getPriority,
   buildTitle,
   buildBody,
